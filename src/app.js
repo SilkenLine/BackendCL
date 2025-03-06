@@ -5,10 +5,7 @@ import cors from "cors";
 import { OAuth2Client } from "google-auth-library";
 
 const app = express();
-app.use((req, res, next) => {
-  res.removeHeader("Cross-Origin-Opener-Policy"); // Elimina la cabecera COOP
-  next();
-});
+
 app.use(
   cors({
     origin: "*", // Permite cualquier dominio
