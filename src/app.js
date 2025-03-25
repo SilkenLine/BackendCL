@@ -78,38 +78,27 @@ app.get("/allcategory", async (req, res) => {
 });
 // Añade esto a tu app.js antes del app.listen
 app.put("/api/update-product", async (req, res) => {
-  console.log("Recibida solicitud PUT", req.body); // Para depuración
-
   try {
-    const { id, nombre, descripcion, precio } = req.body;
+    const { id_producto, nombre, descripcion, precio } = req.body; // Cambiado a id_producto
 
-    if (!id || !nombre || !descripcion || precio === undefined) {
-      return res.status(400).json({
-        error: "Datos incompletos",
-        received: req.body,
-      });
+    if (!id_producto) {
+      // Validación
+      return res.status(400).json({ error: "Falta id_producto" });
     }
 
     const [result] = await pool.query(
       "UPDATE productos SET nombre = ?, descripcion = ?, precio = ? WHERE id_producto = ?",
-      [nombre, descripcion, precio, id]
+      [nombre, descripcion, precio, id_producto] // Usar id_producto
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    res.json({
-      success: true,
-      message: "Producto actualizado correctamente",
-      affectedRows: result.affectedRows,
-    });
+    res.json({ success: true, message: "Producto actualizado" });
   } catch (error) {
     console.error("Error en /api/update-product:", error);
-    res.status(500).json({
-      error: "Error al actualizar el producto",
-      details: error.message,
-    });
+    res.status(500).json({ error: "Error al actualizar" });
   }
 });
 //google
