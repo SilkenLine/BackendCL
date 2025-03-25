@@ -77,9 +77,18 @@ app.get("/allcategory", async (req, res) => {
   }
 });
 // Añade esto a tu app.js antes del app.listen
-app.put("/update-product", async (req, res) => {
+app.put("/api/update-product", async (req, res) => {
+  console.log("Recibida solicitud PUT", req.body); // Para depuración
+
   try {
     const { id, nombre, descripcion, precio } = req.body;
+
+    if (!id || !nombre || !descripcion || precio === undefined) {
+      return res.status(400).json({
+        error: "Datos incompletos",
+        received: req.body,
+      });
+    }
 
     const [result] = await pool.query(
       "UPDATE productos SET nombre = ?, descripcion = ?, precio = ? WHERE id_producto = ?",
@@ -90,10 +99,17 @@ app.put("/update-product", async (req, res) => {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    res.json({ success: true, message: "Producto actualizado correctamente" });
+    res.json({
+      success: true,
+      message: "Producto actualizado correctamente",
+      affectedRows: result.affectedRows,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error al actualizar el producto" });
+    console.error("Error en /api/update-product:", error);
+    res.status(500).json({
+      error: "Error al actualizar el producto",
+      details: error.message,
+    });
   }
 });
 //google
