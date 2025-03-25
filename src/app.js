@@ -63,7 +63,18 @@ app.get("/category", async (req, res) => {
     res.status(500).json({ error: "Error al obtener productos por categoría" });
   }
 });
-
+app.get("/allcategory", async (req, res) => {
+  try {
+    const { categoria } = req.query; // Obtenemos la categoría de los parámetros de consulta
+    const [rows] = await pool.query("SELECT categoria FROM productos", [
+      categoria,
+    ]);
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener productos por categoría" });
+  }
+});
 //google
 const client = new OAuth2Client(
   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
