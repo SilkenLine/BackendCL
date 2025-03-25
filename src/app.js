@@ -66,9 +66,10 @@ app.get("/category", async (req, res) => {
 app.get("/allcategory", async (req, res) => {
   try {
     const { categoria } = req.query; // Obtenemos la categoría de los parámetros de consulta
-    const [rows] = await pool.query("SELECT categoria FROM productos", [
-      categoria,
-    ]);
+    const [rows] = await pool.query(
+      "SELECT DISTINCT categoria FROM productos",
+      [categoria]
+    );
     res.json(rows);
   } catch (error) {
     console.error(error);
