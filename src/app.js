@@ -76,6 +76,26 @@ app.get("/allcategory", async (req, res) => {
     res.status(500).json({ error: "Error al obtener productos por categoría" });
   }
 });
+// Añade esto a tu app.js antes del app.listen
+app.put("/update-product", async (req, res) => {
+  try {
+    const { id, nombre, descripcion, precio } = req.body;
+
+    const [result] = await pool.query(
+      "UPDATE productos SET nombre = ?, descripcion = ?, precio = ? WHERE id_producto = ?",
+      [nombre, descripcion, precio, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    res.json({ success: true, message: "Producto actualizado correctamente" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al actualizar el producto" });
+  }
+});
 //google
 const client = new OAuth2Client(
   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
