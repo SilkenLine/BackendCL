@@ -127,6 +127,35 @@ app.delete("/products/:id", async (req, res) => {
     res.status(500).json({ error: "Error al eliminar el producto" });
   }
 });
+// create
+app.post("/products", async (req, res) => {
+  try {
+    const { nombre, descripcion, categoria, precio, disponible, imagen_url } =
+      req.body;
+
+    // Validaciones básicas
+    if (!nombre || !categoria || precio === undefined) {
+      return res
+        .status(400)
+        .json({ error: "Nombre, categoría y precio son obligatorios" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO productos (nombre, descripcion, categoria, precio, disponible, imagen_url) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [nombre, descripcion, categoria, precio, disponible, imagen_url]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      message: "Producto creado correctamente",
+      ...req.body,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al crear el producto" });
+  }
+});
 //google
 const client = new OAuth2Client(
   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
