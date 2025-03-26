@@ -37,6 +37,16 @@ app.get("/", async (req, res) => {
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
+//obetner todas las categorias
+app.get("/allcategories", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM Categorias");
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener categorias" });
+  }
+});
 app.get("/modal", async (req, res) => {
   try {
     const { id } = req.query; // Obtén el id de los parámetros de consulta
