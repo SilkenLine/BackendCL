@@ -63,6 +63,20 @@ app.get("/category", async (req, res) => {
     res.status(500).json({ error: "Error al obtener productos por categoría" });
   }
 });
+//crepaland tool
+app.get("/admin", async (req, res) => {
+  try {
+    const { categoria } = req.query; // Obtenemos la categoría de los parámetros de consulta
+    const [rows] = await pool.query(
+      "SELECT * FROM productos WHERE categoria = ?",
+      [categoria]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener productos por categoría" });
+  }
+});
 app.get("/allcategory", async (req, res) => {
   try {
     const { categoria } = req.query; // Obtenemos la categoría de los parámetros de consulta
