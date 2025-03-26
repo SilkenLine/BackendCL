@@ -54,7 +54,7 @@ app.get("/category", async (req, res) => {
   try {
     const { categoria } = req.query; // Obtenemos la categoría de los parámetros de consulta
     const [rows] = await pool.query(
-      "SELECT * FROM productos WHERE categoria = ?",
+      "SELECT * FROM productos WHERE categoria = ? AND disponible=1",
       [categoria]
     );
     res.json(rows);
