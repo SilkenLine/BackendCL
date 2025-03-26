@@ -80,13 +80,15 @@ app.get("/allcategory", async (req, res) => {
 app.put("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, descripcion, precio } = req.body;
+    const { nombre, descripcion, categoria, precio, disponible, imagen_url } =
+      req.body;
 
     const [result] = await pool.query(
       `UPDATE productos SET 
-       nombre = ?, descripcion = ?, precio = ?
+       nombre = ?, descripcion = ?, categoria = ?, 
+       precio = ?, disponible = ?, imagen_url = ?
        WHERE id_producto = ?`,
-      [nombre, descripcion, precio, id]
+      [nombre, descripcion, categoria, precio, disponible, imagen_url, id]
     );
 
     if (result.affectedRows === 0) {
