@@ -104,6 +104,29 @@ app.put("/products/:id", async (req, res) => {
     res.status(500).json({ error: "Error al actualizar el producto" });
   }
 });
+// delete
+app.delete("/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await pool.query(
+      "DELETE FROM productos WHERE id_producto = ?",
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    res.json({
+      message: "Producto eliminado correctamente",
+      id,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al eliminar el producto" });
+  }
+});
 //google
 const client = new OAuth2Client(
   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
