@@ -19,7 +19,7 @@ app.use(express.json());
 app.get("/promo", async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM productos ORDER BY precio ASC LIMIT 5"
+      "SELECT * FROM productos ORDER BY precio ASC LIMIT 5 AND disponible=1"
     );
     res.json(rows);
   } catch (error) {
