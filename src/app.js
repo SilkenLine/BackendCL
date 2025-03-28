@@ -33,6 +33,26 @@ function extractPublicId(imageUrl) {
   const publicId = publicIdWithExtension.split(".")[0];
   return publicId;
 }
+app.post("/delete-cloudinary-image", async (req, res) => {
+  try {
+    const { publicId } = req.body;
+
+    if (!publicId) {
+      return res.status(400).json({ error: "publicId es requerido" });
+    }
+
+    const result = await cloudinary.uploader.destroy(publicId);
+
+    if (result.result !== "ok") {
+      return res.status(400).json({ error: "No se pudo eliminar la imagen" });
+    }
+
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error("Error eliminando imagen:", error);
+    res.status(500).json({ error: "Error al eliminar imagen" });
+  }
+});
 
 // Endpoints existentes
 app.get("/promo", async (req, res) => {
@@ -237,45 +257,45 @@ app.post("/products", async (req, res) => {
   }
 });
 
-// Autenticación con Google
-const client = new OAuth2Client(
-  "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
-);
+// // Autenticación con Google
+// const client = new OAuth2Client(
+//   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
+// );
 
-app.post("/api/auth/google", async (req, res) => {
-  const { token } = req.body;
+// app.post("/api/auth/google", async (req, res) => {
+//   const { token } = req.body;
 
-  try {
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience:
-        "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com",
-    });
+//   try {
+//     const ticket = await client.verifyIdToken({
+//       idToken: token,
+//       audience:
+//         "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com",
+//     });
 
-    const payload = ticket.getPayload();
-    const { sub, email, name } = payload;
+//     const payload = ticket.getPayload();
+//     const { sub, email, name } = payload;
 
-    // Verifica si el usuario ya existe en la base de datos
-    const [user] = await pool.query("SELECT * FROM users WHERE google_id = ?", [
-      sub,
-    ]);
+//     // Verifica si el usuario ya existe en la base de datos
+//     const [user] = await pool.query("SELECT * FROM users WHERE google_id = ?", [
+//       sub,
+//     ]);
 
-    if (user.length === 0) {
-      // Si no existe, crea un nuevo usuario
-      const [result] = await pool.query(
-        "INSERT INTO users (google_id, email, name) VALUES (?, ?, ?)",
-        [sub, email, name]
-      );
-      res.json({ id: result.insertId, email, name });
-    } else {
-      // Si ya existe, devuelve la información del usuario
-      res.json(user[0]);
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ error: "Token inválido" });
-  }
-});
+//     if (user.length === 0) {
+//       // Si no existe, crea un nuevo usuario
+//       const [result] = await pool.query(
+//         "INSERT INTO users (google_id, email, name) VALUES (?, ?, ?)",
+//         [sub, email, name]
+//       );
+//       res.json({ id: result.insertId, email, name });
+//     } else {
+//       // Si ya existe, devuelve la información del usuario
+//       res.json(user[0]);
+//     }
+//   } catch (error) {
+//     console.error(error);
+//     res.status(400).json({ error: "Token inválido" });
+//   }
+// });
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
