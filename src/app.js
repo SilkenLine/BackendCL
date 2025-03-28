@@ -90,7 +90,6 @@ app.post("/delete-cloudinary-image", async (req, res) => {
     });
   }
 });
-console.log("Intentando eliminar imagen con publicId:", publicId);
 
 // Endpoints existentes
 app.get("/promo", async (req, res) => {
