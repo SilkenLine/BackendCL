@@ -33,26 +33,64 @@ function extractPublicId(imageUrl) {
   const publicId = publicIdWithExtension.split(".")[0];
   return publicId;
 }
+// Endpoint mejorado para eliminar imágenes
 app.post("/delete-cloudinary-image", async (req, res) => {
   try {
     const { publicId } = req.body;
 
-    if (!publicId) {
-      return res.status(400).json({ error: "publicId es requerido" });
+    // Validación más estricta
+    if (!publicId || typeof publicId !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "publicId válido es requerido",
+        received: publicId,
+      });
     }
 
-    const result = await cloudinary.uploader.destroy(publicId);
+    console.log("Intentando eliminar imagen con publicId:", publicId);
+
+    // Opciones adicionales para mayor control
+    const options = {
+      invalidate: true, // Invalida la caché CDN
+      resource_type: "image", // Asegura que es una imagen
+    };
+
+    const result = await cloudinary.uploader.destroy(publicId, options);
+
+    console.log("Resultado de Cloudinary:", result);
 
     if (result.result !== "ok") {
-      return res.status(400).json({ error: "No se pudo eliminar la imagen" });
+      return res.status(404).json({
+        success: false,
+        error: "No se pudo eliminar la imagen",
+        cloudinaryResult: result,
+        suggestion:
+          "Verifica que el publicId sea correcto y que la imagen exista",
+      });
     }
 
-    res.json({ success: true, result });
+    res.json({
+      success: true,
+      result,
+    });
   } catch (error) {
-    console.error("Error eliminando imagen:", error);
-    res.status(500).json({ error: "Error al eliminar imagen" });
+    console.error("Error eliminando imagen:", {
+      error: error.message,
+      stack: error.stack,
+      bodyReceived: req.body,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: "Error interno al eliminar imagen",
+      details:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Contacta al administrador",
+    });
   }
 });
+console.log("Intentando eliminar imagen con publicId:", publicId);
 
 // Endpoints existentes
 app.get("/promo", async (req, res) => {
