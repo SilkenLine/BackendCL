@@ -23,23 +23,48 @@ app.use(
 );
 app.use(express.json());
 
-// Función para extraer el public_id de la URL de Cloudinary
+// Función mejorada para extraer public_id
 function extractPublicId(imageUrl) {
-  if (!imageUrl || !imageUrl.includes("cloudinary.com")) return null;
+  if (
+    !imageUrl ||
+    typeof imageUrl !== "string" ||
+    !imageUrl.includes("cloudinary.com")
+  ) {
+    return null;
+  }
 
-  const parts = imageUrl.split("/");
-  const uploadIndex = parts.findIndex((part) => part === "upload") + 1;
-  const publicIdWithExtension = parts.slice(uploadIndex + 1).join("/");
-  const publicId = publicIdWithExtension.split(".")[0];
-  return publicId;
+  try {
+    const url = new URL(imageUrl);
+    const pathParts = url.pathname.split("/");
+
+    // Buscar el índice después de 'upload'
+    const uploadIndex = pathParts.findIndex((part) => part === "upload");
+    if (uploadIndex === -1 || uploadIndex >= pathParts.length - 1) {
+      return null;
+    }
+
+    // Tomar las partes después de upload/v123456/
+    const publicIdParts = pathParts.slice(uploadIndex + 2);
+    const publicIdWithExtension = publicIdParts.join("/");
+
+    // Eliminar la extensión del archivo si existe
+    const lastDotIndex = publicIdWithExtension.lastIndexOf(".");
+    return lastDotIndex === -1
+      ? publicIdWithExtension
+      : publicIdWithExtension.substring(0, lastDotIndex);
+  } catch (error) {
+    console.error("Error parsing Cloudinary URL:", error);
+    return null;
+  }
 }
+
 // Endpoint mejorado para eliminar imágenes
 app.post("/delete-cloudinary-image", async (req, res) => {
   try {
     const { publicId } = req.body;
 
     // Validación más estricta
-    if (!publicId || typeof publicId !== "string") {
+    if (!publicId || typeof publicId !== "string" || publicId.trim() === "") {
       return res.status(400).json({
         success: false,
         error: "publicId válido es requerido",
