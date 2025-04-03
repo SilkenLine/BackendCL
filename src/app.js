@@ -318,7 +318,32 @@ app.post("/products", async (req, res) => {
     res.status(500).json({ error: "Error al crear el producto" });
   }
 });
+//CrearCategorias
+app.post("/create-category", async (req, res) => {
+  try {
+    const { nombre } = req.body;
 
+    // Validaciones básicas
+    if (!nombre) {
+      return res.status(400).json({ error: "Error, categoria si nombre" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO Categorias (nombre) 
+       VALUES (?)`,
+      [nombre]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      message: "Categoria creada correctamente",
+      ...req.body,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al crear categoria" });
+  }
+});
 // // Autenticación con Google
 // const client = new OAuth2Client(
 //   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
