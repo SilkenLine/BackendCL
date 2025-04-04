@@ -378,12 +378,31 @@ app.delete("/category/:id", async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    res.status(500).json({
+      error:
+        "No se puede eliminar la categoría porque hay productos asociados.",
+    });
+  }
+});
+app.get("/categories/with-product-count", async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        c.id AS categoria_id,
+        c.nombre AS categoria_nombre,
+        COUNT(p.id_producto) AS total_productos
+      FROM Categorias c
+      LEFT JOIN productos p ON p.categoria = c.id
+      GROUP BY c.id, c.nombre
+      ORDER BY c.id
+    `);
+
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
     res
       .status(500)
-      .json({
-        error:
-          "No se puede eliminar la categoría porque hay productos asociados.",
-      });
+      .json({ error: "Error al obtener los datos de las categorías" });
   }
 });
 
