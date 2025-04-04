@@ -350,24 +350,38 @@ app.delete("/category/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Eliminar el producto de la base de datos
+    // Verificar si hay productos asociados a la categoría
+    const [products] = await pool.query(
+      "SELECT * FROM productos WHERE categoria = ?",
+      [id]
+    );
+
+    if (products.length > 0) {
+      return res.status(400).json({
+        error:
+          "No se puede eliminar la categoría porque hay productos asociados.",
+      });
+    }
+
+    // Si no hay productos, eliminar la categoría
     const [result] = await pool.query("DELETE FROM Categorias WHERE id = ?", [
       id,
     ]);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Categoria no encontrada" });
+      return res.status(404).json({ error: "Categoría no encontrada" });
     }
 
     res.json({
-      message: "Categoria eliminada correctamente",
+      message: "Categoría eliminada correctamente",
       id,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Error al eliminar categoria" });
+    res.status(500).json({ error: "Error al eliminar categoría" });
   }
 });
+
 // // Autenticación con Google
 // const client = new OAuth2Client(
 //   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
