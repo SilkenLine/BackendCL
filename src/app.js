@@ -191,20 +191,6 @@ app.get("/admin", async (req, res) => {
   }
 });
 
-app.get("/allcategory", async (req, res) => {
-  try {
-    const { categoria } = req.query;
-    const [rows] = await pool.query(
-      "SELECT DISTINCT categoria FROM productos",
-      [categoria]
-    );
-    res.json(rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error al obtener productos por categoría" });
-  }
-});
-
 // PUT (Actualizar) producto
 app.put("/products/:id", async (req, res) => {
   try {
@@ -345,7 +331,7 @@ app.post("/create-category", async (req, res) => {
   }
 });
 
-// DELETE modificado para eliminar también de Cloudinary
+// CategoryDelete solo si no tiene elementos asignados
 app.delete("/category/:id", async (req, res) => {
   try {
     const { id } = req.params;
