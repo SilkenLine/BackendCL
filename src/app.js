@@ -378,7 +378,12 @@ app.delete("/category/:id", async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Error al eliminar categoría" });
+    res
+      .status(500)
+      .json({
+        error:
+          "No se puede eliminar la categoría porque hay productos asociados.",
+      });
   }
 });
 
