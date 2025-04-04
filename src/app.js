@@ -344,6 +344,30 @@ app.post("/create-category", async (req, res) => {
     res.status(500).json({ error: "Error al crear categoria" });
   }
 });
+
+// DELETE modificado para eliminar también de Cloudinary
+app.delete("/category/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Eliminar el producto de la base de datos
+    const [result] = await pool.query("DELETE FROM Categorias WHERE id = ?", [
+      id,
+    ]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Categoria no encontrada" });
+    }
+
+    res.json({
+      message: "Categoria eliminada correctamente",
+      id,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al eliminar categoria" });
+  }
+});
 // // Autenticación con Google
 // const client = new OAuth2Client(
 //   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
