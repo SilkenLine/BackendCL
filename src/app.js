@@ -128,7 +128,17 @@ app.get("/promo", async (req, res) => {
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
-
+app.get("/crepa-combo", async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "select * from productos where combo!=1 || combo IS NULL && categoria=1 || categoria=2 order by categoria asc"
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener productos" });
+  }
+});
 app.get("/", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM productos");
