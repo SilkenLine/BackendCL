@@ -4,6 +4,7 @@ import { PORT } from "./config.js";
 import cors from "cors";
 import { OAuth2Client } from "google-auth-library";
 import { v2 as cloudinary } from "cloudinary";
+import { pool as db } from "./db.js";
 
 const app = express();
 
@@ -149,49 +150,93 @@ app.get("/ingredientes", async (req, res) => {
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
-//guardar relacion producto ingrediente
 
-// Obtener relaciones por producto
+// Endpoint para obtener relaciones producto-ingrediente
 app.get("/producto-ingredientes/:producto_id", async (req, res) => {
   try {
     const { producto_id } = req.params;
 
+    // Verificar que el producto_id sea un número válido
+    if (isNaN(producto_id)) {
+      return res.status(400).json({ error: "ID de producto inválido" });
+    }
+
     const [relaciones] = await db.query(
-      "SELECT * FROM producto_ingredientes WHERE producto_id = ?",
+      "SELECT ingrediente_id FROM producto_ingredientes WHERE producto_id = ?",
       [producto_id]
     );
 
-    res.json(relaciones);
+    // Extraer solo los IDs de los ingredientes
+    const ingredientesIds = relaciones.map((rel) => rel.ingrediente_id);
+
+    res.json(ingredientesIds);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Error al obtener relaciones:", error);
+    res.status(500).json({
+      error: "Error al obtener relaciones",
+      details: error.message,
+    });
   }
 });
 
-// Mantener tu endpoint POST existente
+// Endpoint para guardar/actualizar relaciones
 app.post("/producto-ingredientes", async (req, res) => {
   try {
     const { producto_id, ingredientes } = req.body;
 
-    // Eliminar relaciones existentes para este producto
-    await db.query("DELETE FROM producto_ingredientes WHERE producto_id = ?", [
-      producto_id,
-    ]);
-
-    // Insertar nuevas relaciones
-    if (ingredientes.length > 0) {
-      const values = ingredientes.map((ingrediente_id) => [
-        producto_id,
-        ingrediente_id,
-      ]);
-      await db.query(
-        "INSERT INTO producto_ingredientes (producto_id, ingrediente_id) VALUES ?",
-        [values]
-      );
+    // Validaciones
+    if (!producto_id || isNaN(producto_id)) {
+      return res.status(400).json({ error: "ID de producto inválido" });
     }
 
-    res.json({ success: true });
+    if (!Array.isArray(ingredientes)) {
+      return res
+        .status(400)
+        .json({ error: "Formato de ingredientes inválido" });
+    }
+
+    // Iniciar transacción
+    await db.beginTransaction();
+
+    try {
+      // 1. Eliminar relaciones existentes
+      await db.query(
+        "DELETE FROM producto_ingredientes WHERE producto_id = ?",
+        [producto_id]
+      );
+
+      // 2. Insertar nuevas relaciones si hay ingredientes
+      if (ingredientes.length > 0) {
+        // Validar que todos los ingredientes sean números
+        const ingredientesValidos = ingredientes.every((id) => !isNaN(id));
+        if (!ingredientesValidos) {
+          throw new Error("IDs de ingredientes inválidos");
+        }
+
+        const values = ingredientes.map((ingrediente_id) => [
+          producto_id,
+          ingrediente_id,
+        ]);
+        await db.query(
+          "INSERT INTO producto_ingredientes (producto_id, ingrediente_id) VALUES ?",
+          [values]
+        );
+      }
+
+      // Confirmar transacción
+      await db.commit();
+      res.json({ success: true });
+    } catch (error) {
+      // Revertir transacción en caso de error
+      await db.rollback();
+      throw error;
+    }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Error al guardar relaciones:", error);
+    res.status(500).json({
+      error: "Error al guardar relaciones",
+      details: error.message,
+    });
   }
 });
 app.get("/", async (req, res) => {
