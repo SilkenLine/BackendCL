@@ -139,6 +139,16 @@ app.get("/crepa-combo", async (req, res) => {
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
+//Select ingredientes disponibles
+app.get("/ingredientes", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM ingredientes_extra");
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener productos" });
+  }
+});
 app.get("/", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM productos");
