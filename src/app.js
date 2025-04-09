@@ -151,32 +151,6 @@ app.get("/ingredientes", async (req, res) => {
 });
 //guardar relacion producto ingrediente
 
-app.post("/producto-ingredientes", async (req, res) => {
-  try {
-    const { producto_id, ingredientes } = req.body;
-
-    // Eliminar relaciones existentes para este producto
-    await db.query("DELETE FROM producto_ingredientes WHERE producto_id = ?", [
-      producto_id,
-    ]);
-
-    // Insertar nuevas relaciones
-    if (ingredientes.length > 0) {
-      const values = ingredientes.map((ingrediente_id) => [
-        producto_id,
-        ingrediente_id,
-      ]);
-      await db.query(
-        "INSERT INTO producto_ingredientes (producto_id, ingrediente_id) VALUES ?",
-        [values]
-      );
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 // Obtener relaciones por producto
 app.get("/producto-ingredientes/:producto_id", async (req, res) => {
   try {
