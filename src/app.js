@@ -181,10 +181,12 @@ app.get("/producto-ingredientes/:producto_id", async (req, res) => {
 
 // Endpoint para guardar/actualizar relaciones
 app.post("/producto-ingredientes", async (req, res) => {
+  let connection; // Declaramos la conexión fuera del try para poder cerrarla en el finally
+
   try {
     const { producto_id, ingredientes } = req.body;
 
-    // Validaciones
+    // Validaciones básicas
     if (!producto_id || isNaN(producto_id)) {
       return res.status(400).json({ error: "ID de producto inválido" });
     }
@@ -195,12 +197,15 @@ app.post("/producto-ingredientes", async (req, res) => {
         .json({ error: "Formato de ingredientes inválido" });
     }
 
-    // Iniciar transacción
-    await db.beginTransaction();
+    // Obtenemos una conexión del pool
+    connection = await pool.getConnection();
+
+    // Iniciamos transacción
+    await connection.beginTransaction();
 
     try {
       // 1. Eliminar relaciones existentes
-      await db.query(
+      await connection.query(
         "DELETE FROM producto_ingredientes WHERE producto_id = ?",
         [producto_id]
       );
@@ -217,26 +222,30 @@ app.post("/producto-ingredientes", async (req, res) => {
           producto_id,
           ingrediente_id,
         ]);
-        await db.query(
+        await connection.query(
           "INSERT INTO producto_ingredientes (producto_id, ingrediente_id) VALUES ?",
           [values]
         );
       }
 
       // Confirmar transacción
-      await db.commit();
+      await connection.commit();
       res.json({ success: true });
     } catch (error) {
       // Revertir transacción en caso de error
-      await db.rollback();
+      await connection.rollback();
       throw error;
     }
   } catch (error) {
     console.error("Error al guardar relaciones:", error);
     res.status(500).json({
       error: "Error al guardar relaciones",
-      details: error.message,
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
     });
+  } finally {
+    // Liberar la conexión de vuelta al pool
+    if (connection) connection.release();
   }
 });
 app.get("/", async (req, res) => {
