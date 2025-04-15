@@ -511,6 +511,33 @@ app.get("/categories/with-product-count", async (req, res) => {
   }
 });
 
+//CrearExtras
+app.post("/create-extra", async (req, res) => {
+  try {
+    const { nombre, descripcion, precio_extra } = req.body;
+
+    // Validaciones básicas
+    if (!nombre || descripcion || precio_extra === undefined) {
+      return res.status(400).json({ error: "Error, completa todo los campos" });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO ingredientes_extra (nombre,descripcion,precio_extra) 
+       VALUES (?,?,?)`,
+      [nombre, descripcion, precio_extra]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      message: "Extra creado correctamente",
+      ...req.body,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al crear extra" });
+  }
+});
+
 // // Autenticación con Google
 // const client = new OAuth2Client(
 //   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
