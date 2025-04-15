@@ -517,7 +517,7 @@ app.post("/create-extra", async (req, res) => {
     const { nombre, descripcion, precio_extra } = req.body;
 
     // Validaciones básicas
-    if (!nombre || descripcion || precio_extra === undefined) {
+    if (!nombre || !descripcion || !precio_extra === undefined) {
       return res.status(400).json({ error: "Error, completa todo los campos" });
     }
 
