@@ -123,7 +123,7 @@ app.post('/categories/update-order', async (req, res) => {
   const newOrder = req.body;
   try {
     for (let cat of newOrder) {
-      await db.query('UPDATE Categorias SET orden = ? WHERE categoria_id = ?', [cat.orden, cat.id]);
+      await db.query('UPDATE Categorias SET orden = ? WHERE id = ?', [cat.orden, cat.id]);
     }
     res.status(200).json({ message: "Orden actualizado correctamente" });
   } catch (error) {
