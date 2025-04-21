@@ -118,6 +118,31 @@ app.post("/delete-cloudinary-image", async (req, res) => {
 });
 
 // Endpoints existentes
+//actualizar posicion de categorias
+app.post('/categories/update-order', async (req, res) => {
+  const newOrder = req.body;
+  try {
+    for (let cat of newOrder) {
+      await db.query('UPDATE Categorias SET orden = ? WHERE categoria_id = ?', [cat.orden, cat.id]);
+    }
+    res.status(200).json({ message: "Orden actualizado correctamente" });
+  } catch (error) {
+    console.error("Error al actualizar orden:", error);
+    res.status(500).json({ message: "Error actualizando orden" });
+  }
+});
+//Obetner categorias ordenadas
+app.get("/category-asc", async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "select * from Categorias order by orden asc"
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener categorias" });
+  }
+});
 app.get("/promo", async (req, res) => {
   try {
     const [rows] = await pool.query(
