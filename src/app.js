@@ -120,10 +120,19 @@ app.post("/delete-cloudinary-image", async (req, res) => {
 // Endpoints existentes
 //actualizar posicion de categorias
 app.post('/categories/update-order', async (req, res) => {
-  const newOrder = req.body;
+  const newOrder = req.body; // [{ id: 1, orden: 1 }, { id: 2, orden: 2 }, ...]
+
+  if (!Array.isArray(newOrder)) {
+    return res.status(400).json({ message: "El formato enviado no es correcto" });
+  }
+
   try {
     for (let cat of newOrder) {
-      await db.query('UPDATE Categorias SET orden = ? WHERE id = ?', [cat.orden, cat.id]);
+      // Asegúrate de proteger contra SQL Injection si no usas un ORM.
+      await db.query(
+        "UPDATE Categorias SET orden = ? WHERE id = ?",
+        [cat.orden, cat.id]
+      );
     }
     res.status(200).json({ message: "Orden actualizado correctamente" });
   } catch (error) {
@@ -131,6 +140,7 @@ app.post('/categories/update-order', async (req, res) => {
     res.status(500).json({ message: "Error actualizando orden" });
   }
 });
+
 //Obetner categorias ordenadas
 app.get("/category-asc", async (req, res) => {
   try {
@@ -524,17 +534,16 @@ app.get("/categories/with-product-count", async (req, res) => {
       FROM Categorias c
       LEFT JOIN productos p ON p.categoria = c.id
       GROUP BY c.id, c.nombre
-      ORDER BY c.id
+      ORDER BY c.orden ASC
     `);
 
     res.json(rows);
   } catch (error) {
     console.error(error);
-    res
-      .status(500)
-      .json({ error: "Error al obtener los datos de las categorías" });
+    res.status(500).json({ error: "Error al obtener los datos de las categorías" });
   }
 });
+
 
 //CrearExtras
 app.post("/create-extra", async (req, res) => {
