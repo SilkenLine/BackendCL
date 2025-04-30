@@ -619,7 +619,7 @@ app.post("/create-extra", async (req, res) => {
 //BACK PARA PEDIDOS
 
 //Crear orden
-// Crear pedido con productos, extras, combo y precio_total_extras
+// Crear pedido con productos, extras (texto), combo (texto) y precio_total_extras (número)
 app.post("/orders", async (req, res) => {
   const connection = await pool.getConnection();
   await connection.beginTransaction();
@@ -652,10 +652,10 @@ app.post("/orders", async (req, res) => {
 
     const id_pedido = pedidoResult.insertId;
 
-    // Insertar cada producto con extras, combo y precio_total_extras
+    // Insertar productos del pedido
     for (const item of productos) {
-      const extrasTotal = item.extras
-        ? item.extras.reduce(
+      const precio_total_extras = Array.isArray(item.extras_full)
+        ? item.extras_full.reduce(
             (sum, extra) => sum + parseFloat(extra.precio_extra || 0),
             0
           )
@@ -670,9 +670,9 @@ app.post("/orders", async (req, res) => {
           item.id_producto,
           item.cantidad,
           item.precio_unitario,
-          item.extras ? JSON.stringify(item.extras) : null,
-          item.combo ? JSON.stringify(item.combo) : null,
-          extrasTotal,
+          item.extras || null, // texto con nombres de extras
+          item.combo || null, // texto con nombres de combo/crepas
+          precio_total_extras,
         ]
       );
     }
@@ -689,12 +689,11 @@ app.post("/orders", async (req, res) => {
   }
 });
 
-// Obtener pedidos por número telefónico, incluyendo extras y combo
+// Obtener pedidos por número telefónico (incluye extras, combo y precio_total_extras)
 app.get("/orders/user/:telefono", async (req, res) => {
   const { telefono } = req.params;
 
   try {
-    // Obtener todos los pedidos del usuario
     const [pedidos] = await pool.query(
       `SELECT * FROM pedidos WHERE telefono_usuario = ? ORDER BY fecha_pedido DESC`,
       [telefono]
@@ -706,7 +705,6 @@ app.get("/orders/user/:telefono", async (req, res) => {
         .json({ error: "No se encontraron pedidos para este número" });
     }
 
-    // Para cada pedido, obtener sus productos y parsear los campos extras y combo
     const pedidosConProductos = await Promise.all(
       pedidos.map(async (pedido) => {
         const [productos] = await pool.query(
@@ -717,13 +715,14 @@ app.get("/orders/user/:telefono", async (req, res) => {
           [pedido.id_pedido]
         );
 
-        const productosCompletos = productos.map((p) => ({
+        const productosProcesados = productos.map((p) => ({
           ...p,
-          extras: p.extras ? JSON.parse(p.extras) : [],
-          combo: p.combo ? JSON.parse(p.combo) : null,
+          extras: p.extras || "",
+          combo: p.combo || "",
+          precio_total_extras: parseFloat(p.precio_total_extras || 0),
         }));
 
-        return { ...pedido, productos: productosCompletos };
+        return { ...pedido, productos: productosProcesados };
       })
     );
 
