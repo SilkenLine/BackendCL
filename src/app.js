@@ -619,7 +619,7 @@ app.post("/create-extra", async (req, res) => {
 //BACK PARA PEDIDOS
 
 //Crear orden
-
+// Crear pedido con productos y extras
 app.post("/orders", async (req, res) => {
   const connection = await pool.getConnection();
   await connection.beginTransaction();
@@ -652,12 +652,18 @@ app.post("/orders", async (req, res) => {
 
     const id_pedido = pedidoResult.insertId;
 
-    // Insertar cada producto del pedido
+    // Insertar cada producto del pedido, con sus extras como JSON
     for (const item of productos) {
       await connection.query(
-        `INSERT INTO detalles_pedido (id_pedido, id_producto, cantidad, precio_unitario)
-         VALUES (?, ?, ?, ?)`,
-        [id_pedido, item.id_producto, item.cantidad, item.precio_unitario]
+        `INSERT INTO detalles_pedido (id_pedido, id_producto, cantidad, precio_unitario, extras)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          id_pedido,
+          item.id_producto,
+          item.cantidad,
+          item.precio_unitario,
+          item.extras ? JSON.stringify(item.extras) : null,
+        ]
       );
     }
 
@@ -672,7 +678,8 @@ app.post("/orders", async (req, res) => {
     res.status(500).json({ error: "Error al crear el pedido" });
   }
 });
-//Obtener pedido con numero de telefono
+
+// Obtener pedidos por número telefónico, incluyendo extras
 app.get("/orders/user/:telefono", async (req, res) => {
   const { telefono } = req.params;
 
@@ -689,17 +696,23 @@ app.get("/orders/user/:telefono", async (req, res) => {
         .json({ error: "No se encontraron pedidos para este número" });
     }
 
-    // Para cada pedido, obtener sus productos
+    // Para cada pedido, obtener sus productos y parsear los extras
     const pedidosConProductos = await Promise.all(
       pedidos.map(async (pedido) => {
         const [productos] = await pool.query(
-          `SELECT dp.id_producto, p.nombre, dp.cantidad, dp.precio_unitario
+          `SELECT dp.id_producto, p.nombre, dp.cantidad, dp.precio_unitario, dp.extras
            FROM detalles_pedido dp
            JOIN productos p ON p.id_producto = dp.id_producto
            WHERE dp.id_pedido = ?`,
           [pedido.id_pedido]
         );
-        return { ...pedido, productos };
+
+        const productosConExtras = productos.map((p) => ({
+          ...p,
+          extras: p.extras ? JSON.parse(p.extras) : [],
+        }));
+
+        return { ...pedido, productos: productosConExtras };
       })
     );
 
