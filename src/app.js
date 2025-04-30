@@ -663,8 +663,8 @@ app.post("/orders", async (req, res) => {
 
       await connection.query(
         `INSERT INTO detalles_pedido 
-          (id_pedido, id_producto, cantidad, precio_unitario, extras, combo, precio_total_extras)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          (id_pedido, id_producto, cantidad, precio_unitario, extras, combo, precio_total_extras,imagen)
+           VALUES (?, ?, ?, ?, ?, ?, ?,?)`,
         [
           id_pedido,
           item.id_producto,
@@ -672,7 +672,8 @@ app.post("/orders", async (req, res) => {
           item.precio_unitario,
           item.extras || null,
           item.combo || null,
-          item.precio_total_extras, // ← aquí simplemente lo usas tal como viene
+          item.precio_total_extras,
+          item.imagen,
         ]
       );
     }
@@ -708,7 +709,7 @@ app.get("/orders/user/:telefono", async (req, res) => {
     const pedidosConProductos = await Promise.all(
       pedidos.map(async (pedido) => {
         const [productos] = await pool.query(
-          `SELECT dp.id_producto, p.nombre, dp.cantidad, dp.precio_unitario, dp.extras, dp.combo, dp.precio_total_extras
+          `SELECT dp.id_producto, p.nombre, dp.cantidad, dp.precio_unitario, dp.extras, dp.combo, dp.precio_total_extras,dp.imagen
            FROM detalles_pedido dp
            JOIN productos p ON p.id_producto = dp.id_producto
            WHERE dp.id_pedido = ?`,
