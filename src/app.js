@@ -119,20 +119,22 @@ app.post("/delete-cloudinary-image", async (req, res) => {
 
 // Endpoints existentes
 //actualizar posicion de categorias
-app.post('/categories/update-order', async (req, res) => {
+app.post("/categories/update-order", async (req, res) => {
   const newOrder = req.body; // [{ id: 1, orden: 1 }, { id: 2, orden: 2 }, ...]
 
   if (!Array.isArray(newOrder)) {
-    return res.status(400).json({ message: "El formato enviado no es correcto" });
+    return res
+      .status(400)
+      .json({ message: "El formato enviado no es correcto" });
   }
 
   try {
     for (let cat of newOrder) {
       // Asegúrate de proteger contra SQL Injection si no usas un ORM.
-      await db.query(
-        "UPDATE Categorias SET orden = ? WHERE id = ?",
-        [cat.orden, cat.id]
-      );
+      await db.query("UPDATE Categorias SET orden = ? WHERE id = ?", [
+        cat.orden,
+        cat.id,
+      ]);
     }
     res.status(200).json({ message: "Orden actualizado correctamente" });
   } catch (error) {
@@ -165,6 +167,17 @@ app.get("/promo", async (req, res) => {
   }
 });
 app.get("/crepa-combo", async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "select * from productos where combo!=1 || combo IS NULL && categoria=1 || categoria=2 order by categoria asc"
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener productos" });
+  }
+});
+app.get("/crepa-combo1", async (req, res) => {
   try {
     const [rows] = await pool.query(
       "select * from productos where combo!=1 || combo IS NULL && categoria=1 || categoria=2 order by categoria asc"
@@ -540,10 +553,11 @@ app.get("/categories/with-product-count", async (req, res) => {
     res.json(rows);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Error al obtener los datos de las categorías" });
+    res
+      .status(500)
+      .json({ error: "Error al obtener los datos de las categorías" });
   }
 });
-
 
 //CrearExtras
 app.post("/create-extra", async (req, res) => {
