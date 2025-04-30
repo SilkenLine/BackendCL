@@ -177,17 +177,7 @@ app.get("/crepa-combo", async (req, res) => {
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
-app.get("/crepa-combo1", async (req, res) => {
-  try {
-    const [rows] = await pool.query(
-      "select * from productos where combo!=1 || combo IS NULL && categoria=1 || categoria=2 order by categoria asc"
-    );
-    res.json(rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error al obtener productos" });
-  }
-});
+
 //Select ingredientes disponibles
 app.get("/ingredientes", async (req, res) => {
   try {
@@ -625,6 +615,63 @@ app.post("/create-extra", async (req, res) => {
 //     res.status(400).json({ error: "Token inválido" });
 //   }
 // });
+
+//BACK PARA PEDIDOS
+
+//Crear orden
+
+app.post("/orders", async (req, res) => {
+  const connection = await pool.getConnection();
+  await connection.beginTransaction();
+
+  try {
+    const {
+      telefono_usuario,
+      direccion_entrega,
+      metodo_pago,
+      total,
+      notas,
+      productos,
+    } = req.body;
+
+    if (
+      !telefono_usuario ||
+      !direccion_entrega ||
+      !productos ||
+      productos.length === 0
+    ) {
+      return res.status(400).json({ error: "Faltan datos obligatorios" });
+    }
+
+    // Insertar en pedidos
+    const [pedidoResult] = await connection.query(
+      `INSERT INTO pedidos (telefono_usuario, direccion_entrega, metodo_pago, total, notas)
+       VALUES (?, ?, ?, ?, ?)`,
+      [telefono_usuario, direccion_entrega, metodo_pago, total, notas]
+    );
+
+    const id_pedido = pedidoResult.insertId;
+
+    // Insertar cada producto del pedido
+    for (const item of productos) {
+      await connection.query(
+        `INSERT INTO detalles_pedido (id_pedido, id_producto, cantidad, precio_unitario)
+         VALUES (?, ?, ?, ?)`,
+        [id_pedido, item.id_producto, item.cantidad, item.precio_unitario]
+      );
+    }
+
+    await connection.commit();
+    connection.release();
+
+    res.status(201).json({ id_pedido, message: "Pedido creado exitosamente" });
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error(error);
+    res.status(500).json({ error: "Error al crear el pedido" });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
