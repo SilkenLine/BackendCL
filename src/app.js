@@ -619,7 +619,7 @@ app.post("/create-extra", async (req, res) => {
 //BACK PARA PEDIDOS
 
 //Crear orden
-// Crear pedido con productos, extras y combos
+// Crear pedido con productos, extras, combo y precio_total_extras
 app.post("/orders", async (req, res) => {
   const connection = await pool.getConnection();
   await connection.beginTransaction();
@@ -652,11 +652,19 @@ app.post("/orders", async (req, res) => {
 
     const id_pedido = pedidoResult.insertId;
 
-    // Insertar cada producto del pedido, incluyendo extras y combo
+    // Insertar cada producto con extras, combo y precio_total_extras
     for (const item of productos) {
+      const extrasTotal = item.extras
+        ? item.extras.reduce(
+            (sum, extra) => sum + parseFloat(extra.precio_extra || 0),
+            0
+          )
+        : 0;
+
       await connection.query(
-        `INSERT INTO detalles_pedido (id_pedido, id_producto, cantidad, precio_unitario, extras, combo)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO detalles_pedido 
+        (id_pedido, id_producto, cantidad, precio_unitario, extras, combo, precio_total_extras)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           id_pedido,
           item.id_producto,
@@ -664,6 +672,7 @@ app.post("/orders", async (req, res) => {
           item.precio_unitario,
           item.extras ? JSON.stringify(item.extras) : null,
           item.combo ? JSON.stringify(item.combo) : null,
+          extrasTotal,
         ]
       );
     }
@@ -701,7 +710,7 @@ app.get("/orders/user/:telefono", async (req, res) => {
     const pedidosConProductos = await Promise.all(
       pedidos.map(async (pedido) => {
         const [productos] = await pool.query(
-          `SELECT dp.id_producto, p.nombre, dp.cantidad, dp.precio_unitario, dp.extras, dp.combo
+          `SELECT dp.id_producto, p.nombre, dp.cantidad, dp.precio_unitario, dp.extras, dp.combo, dp.precio_total_extras
            FROM detalles_pedido dp
            JOIN productos p ON p.id_producto = dp.id_producto
            WHERE dp.id_pedido = ?`,
