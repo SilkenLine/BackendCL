@@ -672,6 +672,43 @@ app.post("/orders", async (req, res) => {
     res.status(500).json({ error: "Error al crear el pedido" });
   }
 });
+//Obtener pedido con numero de telefono
+app.get("/orders/user/:telefono", async (req, res) => {
+  const { telefono } = req.params;
+
+  try {
+    // Obtener todos los pedidos del usuario
+    const [pedidos] = await pool.query(
+      `SELECT * FROM pedidos WHERE telefono_usuario = ? ORDER BY fecha_pedido DESC`,
+      [telefono]
+    );
+
+    if (pedidos.length === 0) {
+      return res
+        .status(404)
+        .json({ error: "No se encontraron pedidos para este número" });
+    }
+
+    // Para cada pedido, obtener sus productos
+    const pedidosConProductos = await Promise.all(
+      pedidos.map(async (pedido) => {
+        const [productos] = await pool.query(
+          `SELECT dp.id_producto, p.nombre, dp.cantidad, dp.precio_unitario
+           FROM detalles_pedido dp
+           JOIN productos p ON p.id_producto = dp.id_producto
+           WHERE dp.id_pedido = ?`,
+          [pedido.id_pedido]
+        );
+        return { ...pedido, productos };
+      })
+    );
+
+    res.json(pedidosConProductos);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener los pedidos del usuario" });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
