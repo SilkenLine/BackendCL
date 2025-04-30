@@ -663,16 +663,16 @@ app.post("/orders", async (req, res) => {
 
       await connection.query(
         `INSERT INTO detalles_pedido 
-        (id_pedido, id_producto, cantidad, precio_unitario, extras, combo, precio_total_extras)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          (id_pedido, id_producto, cantidad, precio_unitario, extras, combo, precio_total_extras)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           id_pedido,
           item.id_producto,
           item.cantidad,
           item.precio_unitario,
-          item.extras || null, // texto con nombres de extras
-          item.combo || null, // texto con nombres de combo/crepas
-          precio_total_extras,
+          item.extras || null,
+          item.combo || null,
+          item.precio_total_extras, // ← aquí simplemente lo usas tal como viene
         ]
       );
     }
