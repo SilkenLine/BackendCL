@@ -118,6 +118,26 @@ app.post("/delete-cloudinary-image", async (req, res) => {
 });
 
 // Endpoints existentes
+//actualizar nombre de categorias
+app.put("/categories/update-name/:id", async (req, res) => {
+  const { id } = req.params;
+  const { nombre } = req.body;
+
+  if (!id || isNaN(id)) {
+    return res.status(400).send(); // Respuesta vacía para errores también
+  }
+
+  try {
+    await pool.query("UPDATE Categorias SET nombre = ? WHERE id = ?", [
+      nombre,
+      id,
+    ]);
+    res.status(204).send(); // 204 No Content
+  } catch (error) {
+    console.error("Error al actualizar:", error);
+    res.status(500).send(); // Respuesta vacía para errores
+  }
+});
 //actualizar posicion de categorias
 app.post("/categories/update-order", async (req, res) => {
   const newOrder = req.body; // [{ id: 1, orden: 1 }, { id: 2, orden: 2 }, ...]
