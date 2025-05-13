@@ -175,6 +175,15 @@ app.get("/category-asc", async (req, res) => {
     res.status(500).json({ error: "Error al obtener categorias" });
   }
 });
+app.get("/active-orders", async (req, res) => {
+  try {
+    const [rows] = await pool.query("select * from pedidos where estado=0");
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener ordenes" });
+  }
+});
 app.get("/promo", async (req, res) => {
   try {
     const [rows] = await pool.query(
