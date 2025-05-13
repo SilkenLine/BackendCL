@@ -184,6 +184,7 @@ app.get("/active-orders", async (req, res) => {
     res.status(500).json({ error: "Error al obtener ordenes" });
   }
 });
+
 app.get("/promo", async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -241,6 +242,98 @@ app.get("/producto-ingredientes/:producto_id", async (req, res) => {
     console.error("Error al obtener relaciones:", error);
     res.status(500).json({
       error: "Error al obtener relaciones",
+      details: error.message,
+    });
+  }
+});
+// Endpoint para obtener la información completa de un pedido
+app.get("/order-details/:id_pedido", async (req, res) => {
+  try {
+    const { id_pedido } = req.params;
+
+    // Verificar que el id_pedido sea un número válido
+    if (isNaN(id_pedido)) {
+      return res.status(400).json({ error: "ID de pedido inválido" });
+    }
+
+    // Consulta SQL
+    const [rows] = await db.query(
+      `
+      SELECT 
+          p.id_pedido,
+          p.telefono_usuario,
+          p.direccion_entrega,
+          p.fecha_pedido,
+          p.estado,
+          p.metodo_pago,
+          p.total,
+          p.notas,
+
+          d.id_detalle,
+          d.id_producto AS detalle_id_producto,
+          d.cantidad,
+          d.precio_unitario AS detalle_precio_unitario,
+          d.extras,
+          d.combo AS detalle_combo,
+          d.precio_total_extras,
+          d.imagen AS detalle_imagen,
+
+          prod.nombre AS producto_nombre,
+          prod.descripcion AS producto_descripcion,
+          prod.categoria AS producto_categoria,
+          prod.precio AS producto_precio,
+          prod.disponible AS producto_disponible,
+          prod.imagen_url AS producto_imagen_url,
+          prod.combo AS producto_combo
+      FROM pedidos p
+      JOIN detalles_pedido d ON p.id_pedido = d.id_pedido
+      JOIN productos prod ON d.id_producto = prod.id_producto
+      WHERE p.id_pedido = ?
+    `,
+      [id_pedido]
+    );
+
+    // Verificar si el pedido existe
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    // Estructurar la respuesta
+    const pedido = {
+      id_pedido: rows[0].id_pedido,
+      telefono_usuario: rows[0].telefono_usuario,
+      direccion_entrega: rows[0].direccion_entrega,
+      fecha_pedido: rows[0].fecha_pedido,
+      estado: rows[0].estado,
+      metodo_pago: rows[0].metodo_pago,
+      total: rows[0].total,
+      notas: rows[0].notas,
+      detalles: rows.map((row) => ({
+        id_detalle: row.id_detalle,
+        id_producto: row.detalle_id_producto,
+        cantidad: row.cantidad,
+        precio_unitario: row.detalle_precio_unitario,
+        extras: row.extras,
+        combo: row.detalle_combo,
+        precio_total_extras: row.precio_total_extras,
+        imagen: row.detalle_imagen,
+        producto: {
+          nombre: row.producto_nombre,
+          descripcion: row.producto_descripcion,
+          categoria: row.producto_categoria,
+          precio: row.producto_precio,
+          disponible: row.producto_disponible,
+          imagen_url: row.producto_imagen_url,
+          combo: row.producto_combo,
+        },
+      })),
+    };
+
+    res.json(pedido);
+  } catch (error) {
+    console.error("Error al obtener el pedido:", error);
+    res.status(500).json({
+      error: "Error al obtener el pedido",
       details: error.message,
     });
   }
