@@ -2,17 +2,23 @@ import express from "express";
 import { pool } from "./db.js";
 import { PORT } from "./config.js";
 import cors from "cors";
-import { OAuth2Client } from "google-auth-library";
 import { v2 as cloudinary } from "cloudinary";
-import { pool as db } from "./db.js";
 
 const app = express();
 
-// Configuración de Cloudinary con tus credenciales
+/*
+  IMPORTANTE:
+  Mueve estas credenciales a tu .env cuando puedas.
+  Ejemplo:
+  CLOUDINARY_CLOUD_NAME=...
+  CLOUDINARY_API_KEY=...
+  CLOUDINARY_API_SECRET=...
+*/
 cloudinary.config({
-  cloud_name: "dxkoujebx",
-  api_key: "191512298222633",
-  api_secret: "KqBGs5GOtaDtx0w2lVYACQ3cGPw",
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "dxkoujebx",
+  api_key: process.env.CLOUDINARY_API_KEY || "191512298222633",
+  api_secret:
+    process.env.CLOUDINARY_API_SECRET || "KqBGs5GOtaDtx0w2lVYACQ3cGPw",
 });
 
 app.use(
@@ -20,11 +26,11 @@ app.use(
     origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  })
+  }),
 );
+
 app.use(express.json());
 
-// Función mejorada para extraer public_id
 function extractPublicId(imageUrl) {
   if (
     !imageUrl ||
@@ -37,19 +43,16 @@ function extractPublicId(imageUrl) {
   try {
     const url = new URL(imageUrl);
     const pathParts = url.pathname.split("/");
-
-    // Buscar el índice después de 'upload'
     const uploadIndex = pathParts.findIndex((part) => part === "upload");
+
     if (uploadIndex === -1 || uploadIndex >= pathParts.length - 1) {
       return null;
     }
 
-    // Tomar las partes después de upload/v123456/
     const publicIdParts = pathParts.slice(uploadIndex + 2);
     const publicIdWithExtension = publicIdParts.join("/");
-
-    // Eliminar la extensión del archivo si existe
     const lastDotIndex = publicIdWithExtension.lastIndexOf(".");
+
     return lastDotIndex === -1
       ? publicIdWithExtension
       : publicIdWithExtension.substring(0, lastDotIndex);
@@ -59,12 +62,26 @@ function extractPublicId(imageUrl) {
   }
 }
 
-// Endpoint mejorado para eliminar imágenes
+app.get("/test-db", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json({
+      ok: true,
+      time: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error conectando a PostgreSQL:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message,
+    });
+  }
+});
+
 app.post("/delete-cloudinary-image", async (req, res) => {
   try {
     const { publicId } = req.body;
 
-    // Validación más estricta
     if (!publicId || typeof publicId !== "string" || publicId.trim() === "") {
       return res.status(400).json({
         success: false,
@@ -73,17 +90,10 @@ app.post("/delete-cloudinary-image", async (req, res) => {
       });
     }
 
-    console.log("Intentando eliminar imagen con publicId:", publicId);
-
-    // Opciones adicionales para mayor control
-    const options = {
-      invalidate: true, // Invalida la caché CDN
-      resource_type: "image", // Asegura que es una imagen
-    };
-
-    const result = await cloudinary.uploader.destroy(publicId, options);
-
-    console.log("Resultado de Cloudinary:", result);
+    const result = await cloudinary.uploader.destroy(publicId, {
+      invalidate: true,
+      resource_type: "image",
+    });
 
     if (result.result !== "ok") {
       return res.status(404).json({
@@ -117,30 +127,33 @@ app.post("/delete-cloudinary-image", async (req, res) => {
   }
 });
 
-// Endpoints existentes
-//actualizar nombre de categorias
 app.put("/categories/update-name/:id", async (req, res) => {
   const { id } = req.params;
   const { nombre } = req.body;
 
-  if (!id || isNaN(id)) {
-    return res.status(400).send(); // Respuesta vacía para errores también
+  if (!id || isNaN(Number(id))) {
+    return res.status(400).send();
   }
 
   try {
-    await pool.query("UPDATE Categorias SET nombre = ? WHERE id = ?", [
-      nombre,
-      id,
-    ]);
-    res.status(204).send(); // 204 No Content
+    const result = await pool.query(
+      "UPDATE categorias SET nombre = $1 WHERE id = $2",
+      [nombre, id],
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).send();
+    }
+
+    res.status(204).send();
   } catch (error) {
     console.error("Error al actualizar:", error);
-    res.status(500).send(); // Respuesta vacía para errores
+    res.status(500).send();
   }
 });
-//actualizar posicion de categorias
+
 app.post("/categories/update-order", async (req, res) => {
-  const newOrder = req.body; // [{ id: 1, orden: 1 }, { id: 2, orden: 2 }, ...]
+  const newOrder = req.body;
 
   if (!Array.isArray(newOrder)) {
     return res
@@ -148,37 +161,48 @@ app.post("/categories/update-order", async (req, res) => {
       .json({ message: "El formato enviado no es correcto" });
   }
 
+  const client = await pool.connect();
+
   try {
-    for (let cat of newOrder) {
-      // Asegúrate de proteger contra SQL Injection si no usas un ORM.
-      await db.query("UPDATE Categorias SET orden = ? WHERE id = ?", [
+    await client.query("BEGIN");
+
+    for (const cat of newOrder) {
+      await client.query("UPDATE categorias SET orden = $1 WHERE id = $2", [
         cat.orden,
         cat.id,
       ]);
     }
+
+    await client.query("COMMIT");
     res.status(200).json({ message: "Orden actualizado correctamente" });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error al actualizar orden:", error);
     res.status(500).json({ message: "Error actualizando orden" });
+  } finally {
+    client.release();
   }
 });
 
-//Obetner categorias ordenadas
 app.get("/category-asc", async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "select * from Categorias order by orden asc"
+    const result = await pool.query(
+      "SELECT * FROM categorias ORDER BY orden ASC",
     );
-    res.json(rows);
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener categorias" });
   }
 });
+
 app.get("/active-orders", async (req, res) => {
   try {
-    const [rows] = await pool.query("select * from pedidos where estado=0");
-    res.json(rows);
+    const result = await pool.query(
+      "SELECT * FROM pedidos WHERE estado = $1 OR estado = $2 ORDER BY fecha_pedido DESC",
+      ["0", "pendiente"],
+    );
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener ordenes" });
@@ -187,55 +211,61 @@ app.get("/active-orders", async (req, res) => {
 
 app.get("/promo", async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT * FROM productos WHERE disponible=1 ORDER BY precio ASC LIMIT 5"
+    const result = await pool.query(
+      "SELECT * FROM productos WHERE disponible = true ORDER BY precio ASC LIMIT 5",
     );
-    res.json(rows);
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
+
 app.get("/crepa-combo", async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "select * from productos where combo!=1 || combo IS NULL && categoria=1 || categoria=2 order by categoria asc"
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM productos
+      WHERE combo IS DISTINCT FROM true
+        AND categoria IN ($1, $2)
+      ORDER BY categoria ASC
+      `,
+      ["1", "2"],
     );
-    res.json(rows);
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
 
-//Select ingredientes disponibles
 app.get("/ingredientes", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM ingredientes_extra");
-    res.json(rows);
+    const result = await pool.query(
+      "SELECT * FROM ingredientes_extra ORDER BY id_ingrediente ASC",
+    );
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Error al obtener productos" });
+    res.status(500).json({ error: "Error al obtener ingredientes" });
   }
 });
 
-// Endpoint para obtener relaciones producto-ingrediente
 app.get("/producto-ingredientes/:producto_id", async (req, res) => {
   try {
     const { producto_id } = req.params;
 
-    // Verificar que el producto_id sea un número válido
-    if (isNaN(producto_id)) {
+    if (isNaN(Number(producto_id))) {
       return res.status(400).json({ error: "ID de producto inválido" });
     }
 
-    const [relaciones] = await db.query(
-      "SELECT ingrediente_id FROM producto_ingredientes WHERE producto_id = ?",
-      [producto_id]
+    const result = await pool.query(
+      "SELECT ingrediente_id FROM producto_ingredientes WHERE producto_id = $1",
+      [producto_id],
     );
 
-    // Extraer solo los IDs de los ingredientes
-    const ingredientesIds = relaciones.map((rel) => rel.ingrediente_id);
+    const ingredientesIds = result.rows.map((rel) => rel.ingrediente_id);
 
     res.json(ingredientesIds);
   } catch (error) {
@@ -246,59 +276,55 @@ app.get("/producto-ingredientes/:producto_id", async (req, res) => {
     });
   }
 });
-// Endpoint para obtener la información completa de un pedido
+
 app.get("/order-details/:id_pedido", async (req, res) => {
   try {
     const { id_pedido } = req.params;
 
-    // Verificar que el id_pedido sea un número válido
-    if (isNaN(id_pedido)) {
+    if (isNaN(Number(id_pedido))) {
       return res.status(400).json({ error: "ID de pedido inválido" });
     }
 
-    // Consulta SQL
-    const [rows] = await db.query(
+    const result = await pool.query(
       `
       SELECT 
-          p.id_pedido,
-          p.telefono_usuario,
-          p.direccion_entrega,
-          p.fecha_pedido,
-          p.estado,
-          p.metodo_pago,
-          p.total,
-          p.notas,
-
-          d.id_detalle,
-          d.id_producto AS detalle_id_producto,
-          d.cantidad,
-          d.precio_unitario AS detalle_precio_unitario,
-          d.extras,
-          d.combo AS detalle_combo,
-          d.precio_total_extras,
-          d.imagen AS detalle_imagen,
-
-          prod.nombre AS producto_nombre,
-          prod.descripcion AS producto_descripcion,
-          prod.categoria AS producto_categoria,
-          prod.precio AS producto_precio,
-          prod.disponible AS producto_disponible,
-          prod.imagen_url AS producto_imagen_url,
-          prod.combo AS producto_combo
+        p.id_pedido,
+        p.telefono_usuario,
+        p.direccion_entrega,
+        p.fecha_pedido,
+        p.estado,
+        p.metodo_pago,
+        p.total,
+        p.notas,
+        d.id_detalle,
+        d.id_producto AS detalle_id_producto,
+        d.cantidad,
+        d.precio_unitario AS detalle_precio_unitario,
+        d.extras,
+        d.combo AS detalle_combo,
+        d.precio_total_extras,
+        d.imagen AS detalle_imagen,
+        prod.nombre AS producto_nombre,
+        prod.descripcion AS producto_descripcion,
+        prod.categoria AS producto_categoria,
+        prod.precio AS producto_precio,
+        prod.disponible AS producto_disponible,
+        prod.imagen_url AS producto_imagen_url,
+        prod.combo AS producto_combo
       FROM pedidos p
       JOIN detalles_pedido d ON p.id_pedido = d.id_pedido
       JOIN productos prod ON d.id_producto = prod.id_producto
-      WHERE p.id_pedido = ?
-    `,
-      [id_pedido]
+      WHERE p.id_pedido = $1
+      `,
+      [id_pedido],
     );
 
-    // Verificar si el pedido existe
+    const rows = result.rows;
+
     if (rows.length === 0) {
       return res.status(404).json({ error: "Pedido no encontrado" });
     }
 
-    // Estructurar la respuesta
     const pedido = {
       id_pedido: rows[0].id_pedido,
       telefono_usuario: rows[0].telefono_usuario,
@@ -339,64 +365,56 @@ app.get("/order-details/:id_pedido", async (req, res) => {
   }
 });
 
-// Endpoint para guardar/actualizar relaciones
 app.post("/producto-ingredientes", async (req, res) => {
-  let connection; // Declaramos la conexión fuera del try para poder cerrarla en el finally
+  const { producto_id, ingredientes } = req.body;
+
+  if (!producto_id || isNaN(Number(producto_id))) {
+    return res.status(400).json({ error: "ID de producto inválido" });
+  }
+
+  if (!Array.isArray(ingredientes)) {
+    return res.status(400).json({ error: "Formato de ingredientes inválido" });
+  }
+
+  const ingredientesValidos = ingredientes.every((id) => !isNaN(Number(id)));
+  if (!ingredientesValidos) {
+    return res.status(400).json({ error: "IDs de ingredientes inválidos" });
+  }
+
+  const client = await pool.connect();
 
   try {
-    const { producto_id, ingredientes } = req.body;
+    await client.query("BEGIN");
 
-    // Validaciones básicas
-    if (!producto_id || isNaN(producto_id)) {
-      return res.status(400).json({ error: "ID de producto inválido" });
-    }
+    await client.query(
+      "DELETE FROM producto_ingredientes WHERE producto_id = $1",
+      [producto_id],
+    );
 
-    if (!Array.isArray(ingredientes)) {
-      return res
-        .status(400)
-        .json({ error: "Formato de ingredientes inválido" });
-    }
+    if (ingredientes.length > 0) {
+      const values = [];
+      const placeholders = ingredientes
+        .map((ingrediente_id, index) => {
+          const base = index * 2;
+          values.push(producto_id, ingrediente_id);
+          return `($${base + 1}, $${base + 2})`;
+        })
+        .join(", ");
 
-    // Obtenemos una conexión del pool
-    connection = await pool.getConnection();
-
-    // Iniciamos transacción
-    await connection.beginTransaction();
-
-    try {
-      // 1. Eliminar relaciones existentes
-      await connection.query(
-        "DELETE FROM producto_ingredientes WHERE producto_id = ?",
-        [producto_id]
+      await client.query(
+        `
+        INSERT INTO producto_ingredientes (producto_id, ingrediente_id)
+        VALUES ${placeholders}
+        ON CONFLICT (producto_id, ingrediente_id) DO NOTHING
+        `,
+        values,
       );
-
-      // 2. Insertar nuevas relaciones si hay ingredientes
-      if (ingredientes.length > 0) {
-        // Validar que todos los ingredientes sean números
-        const ingredientesValidos = ingredientes.every((id) => !isNaN(id));
-        if (!ingredientesValidos) {
-          throw new Error("IDs de ingredientes inválidos");
-        }
-
-        const values = ingredientes.map((ingrediente_id) => [
-          producto_id,
-          ingrediente_id,
-        ]);
-        await connection.query(
-          "INSERT INTO producto_ingredientes (producto_id, ingrediente_id) VALUES ?",
-          [values]
-        );
-      }
-
-      // Confirmar transacción
-      await connection.commit();
-      res.json({ success: true });
-    } catch (error) {
-      // Revertir transacción en caso de error
-      await connection.rollback();
-      throw error;
     }
+
+    await client.query("COMMIT");
+    res.json({ success: true });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error al guardar relaciones:", error);
     res.status(500).json({
       error: "Error al guardar relaciones",
@@ -404,14 +422,16 @@ app.post("/producto-ingredientes", async (req, res) => {
         process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   } finally {
-    // Liberar la conexión de vuelta al pool
-    if (connection) connection.release();
+    client.release();
   }
 });
+
 app.get("/", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM productos");
-    res.json(rows);
+    const result = await pool.query(
+      "SELECT * FROM productos ORDER BY id_producto ASC",
+    );
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener productos" });
@@ -420,8 +440,8 @@ app.get("/", async (req, res) => {
 
 app.get("/allcategories", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM Categorias");
-    res.json(rows);
+    const result = await pool.query("SELECT * FROM categorias ORDER BY id ASC");
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener categorias" });
@@ -431,11 +451,11 @@ app.get("/allcategories", async (req, res) => {
 app.get("/modal", async (req, res) => {
   try {
     const { id } = req.query;
-    const [rows] = await pool.query(
-      "SELECT * FROM productos WHERE id_producto = ?",
-      [id]
+    const result = await pool.query(
+      "SELECT * FROM productos WHERE id_producto = $1",
+      [id],
     );
-    res.json(rows);
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener productos" });
@@ -445,11 +465,11 @@ app.get("/modal", async (req, res) => {
 app.get("/category", async (req, res) => {
   try {
     const { categoria } = req.query;
-    const [rows] = await pool.query(
-      "SELECT * FROM productos WHERE categoria = ? AND disponible=1",
-      [categoria]
+    const result = await pool.query(
+      "SELECT * FROM productos WHERE categoria = $1 AND disponible = true ORDER BY id_producto ASC",
+      [categoria],
     );
-    res.json(rows);
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener productos por categoría" });
@@ -459,39 +479,63 @@ app.get("/category", async (req, res) => {
 app.get("/admin", async (req, res) => {
   try {
     const { categoria } = req.query;
-    const [rows] = await pool.query(
-      "SELECT * FROM productos WHERE categoria = ?",
-      [categoria]
+    const result = await pool.query(
+      "SELECT * FROM productos WHERE categoria = $1 ORDER BY id_producto ASC",
+      [categoria],
     );
-    res.json(rows);
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener productos por categoría" });
   }
 });
 
-// PUT (Actualizar) producto
 app.put("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, descripcion, categoria, precio, disponible, imagen_url } =
-      req.body;
+    const {
+      nombre,
+      descripcion,
+      categoria,
+      precio,
+      disponible,
+      imagen_url,
+      combo,
+    } = req.body;
 
-    const [result] = await pool.query(
-      `UPDATE productos SET 
-       nombre = ?, descripcion = ?, categoria = ?, 
-       precio = ?, disponible = ?, imagen_url = ?
-       WHERE id_producto = ?`,
-      [nombre, descripcion, categoria, precio, disponible, imagen_url, id]
+    const result = await pool.query(
+      `
+      UPDATE productos
+      SET
+        nombre = $1,
+        descripcion = $2,
+        categoria = $3,
+        precio = $4,
+        disponible = $5,
+        imagen_url = $6,
+        combo = COALESCE($7, combo)
+      WHERE id_producto = $8
+      RETURNING *
+      `,
+      [
+        nombre,
+        descripcion,
+        categoria,
+        precio,
+        disponible,
+        imagen_url,
+        combo,
+        id,
+      ],
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
     res.json({
       message: "Producto actualizado correctamente",
-      id,
+      producto: result.rows[0],
     });
   } catch (error) {
     console.error(error);
@@ -499,27 +543,25 @@ app.put("/products/:id", async (req, res) => {
   }
 });
 
-// DELETE modificado para eliminar también de Cloudinary
 app.delete("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1. Obtener el producto para conseguir la URL de la imagen
-    const [product] = await pool.query(
-      "SELECT * FROM productos WHERE id_producto = ?",
-      [id]
+    const productResult = await pool.query(
+      "SELECT * FROM productos WHERE id_producto = $1",
+      [id],
     );
 
-    if (product.length === 0) {
+    if (productResult.rows.length === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    const productData = product[0];
+    const productData = productResult.rows[0];
     const imageUrl = productData.imagen_url;
 
-    // 2. Si tiene imagen en Cloudinary, eliminarla
     if (imageUrl) {
       const publicId = extractPublicId(imageUrl);
+
       if (publicId) {
         try {
           await cloudinary.uploader.destroy(publicId);
@@ -527,20 +569,18 @@ app.delete("/products/:id", async (req, res) => {
         } catch (cloudinaryError) {
           console.error(
             "Error eliminando imagen de Cloudinary:",
-            cloudinaryError
+            cloudinaryError,
           );
-          // Continuamos aunque falle la eliminación en Cloudinary
         }
       }
     }
 
-    // 3. Eliminar el producto de la base de datos
-    const [result] = await pool.query(
-      "DELETE FROM productos WHERE id_producto = ?",
-      [id]
+    const deleteResult = await pool.query(
+      "DELETE FROM productos WHERE id_producto = $1",
+      [id],
     );
 
-    if (result.affectedRows === 0) {
+    if (deleteResult.rowCount === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
@@ -554,27 +594,37 @@ app.delete("/products/:id", async (req, res) => {
   }
 });
 
-// CREATE producto
 app.post("/products", async (req, res) => {
   try {
-    const { nombre, descripcion, categoria, precio, disponible, imagen_url } =
-      req.body;
+    const {
+      nombre,
+      descripcion,
+      categoria,
+      precio,
+      disponible = true,
+      imagen_url,
+      combo = false,
+    } = req.body;
 
-    // Validaciones básicas
     if (!nombre || !categoria || precio === undefined) {
       return res
         .status(400)
         .json({ error: "Nombre, categoría y precio son obligatorios" });
     }
 
-    const [result] = await pool.query(
-      `INSERT INTO productos (nombre, descripcion, categoria, precio, disponible, imagen_url) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [nombre, descripcion, categoria, precio, disponible, imagen_url]
+    const result = await pool.query(
+      `
+      INSERT INTO productos
+        (nombre, descripcion, categoria, precio, disponible, imagen_url, combo)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id_producto
+      `,
+      [nombre, descripcion, categoria, precio, disponible, imagen_url, combo],
     );
 
     res.status(201).json({
-      id: result.insertId,
+      id: result.rows[0].id_producto,
       message: "Producto creado correctamente",
       ...req.body,
     });
@@ -583,24 +633,22 @@ app.post("/products", async (req, res) => {
     res.status(500).json({ error: "Error al crear el producto" });
   }
 });
-//CrearCategorias
+
 app.post("/create-category", async (req, res) => {
   try {
     const { nombre } = req.body;
 
-    // Validaciones básicas
     if (!nombre) {
-      return res.status(400).json({ error: "Error, categoria si nombre" });
+      return res.status(400).json({ error: "Error, categoria sin nombre" });
     }
 
-    const [result] = await pool.query(
-      `INSERT INTO Categorias (nombre) 
-       VALUES (?)`,
-      [nombre]
+    const result = await pool.query(
+      "INSERT INTO categorias (nombre) VALUES ($1) RETURNING id",
+      [nombre],
     );
 
     res.status(201).json({
-      id: result.insertId,
+      id: result.rows[0].id,
       message: "Categoria creada correctamente",
       ...req.body,
     });
@@ -610,30 +658,28 @@ app.post("/create-category", async (req, res) => {
   }
 });
 
-// CategoryDelete solo si no tiene elementos asignados
 app.delete("/category/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar si hay productos asociados a la categoría
-    const [products] = await pool.query(
-      "SELECT * FROM productos WHERE categoria = ?",
-      [id]
+    const productsResult = await pool.query(
+      "SELECT id_producto FROM productos WHERE categoria = $1 LIMIT 1",
+      [id],
     );
 
-    if (products.length > 0) {
+    if (productsResult.rows.length > 0) {
       return res.status(400).json({
         error:
           "No se puede eliminar la categoría porque hay productos asociados.",
       });
     }
 
-    // Si no hay productos, eliminar la categoría
-    const [result] = await pool.query("DELETE FROM Categorias WHERE id = ?", [
-      id,
-    ]);
+    const deleteResult = await pool.query(
+      "DELETE FROM categorias WHERE id = $1",
+      [id],
+    );
 
-    if (result.affectedRows === 0) {
+    if (deleteResult.rowCount === 0) {
       return res.status(404).json({ error: "Categoría no encontrada" });
     }
 
@@ -649,20 +695,21 @@ app.delete("/category/:id", async (req, res) => {
     });
   }
 });
+
 app.get("/categories/with-product-count", async (req, res) => {
   try {
-    const [rows] = await pool.query(`
+    const result = await pool.query(`
       SELECT 
         c.id AS categoria_id,
         c.nombre AS categoria_nombre,
         COUNT(p.id_producto) AS total_productos
-      FROM Categorias c
-      LEFT JOIN productos p ON p.categoria = c.id
-      GROUP BY c.id, c.nombre
+      FROM categorias c
+      LEFT JOIN productos p ON p.categoria::integer = c.id
+      GROUP BY c.id, c.nombre, c.orden
       ORDER BY c.orden ASC
     `);
 
-    res.json(rows);
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res
@@ -671,24 +718,29 @@ app.get("/categories/with-product-count", async (req, res) => {
   }
 });
 
-//CrearExtras
 app.post("/create-extra", async (req, res) => {
   try {
-    const { nombre, descripcion, precio_extra } = req.body;
+    const { nombre, descripcion, precio_extra, disponible = true } = req.body;
 
-    // Validaciones básicas
-    if (!nombre || !descripcion || !precio_extra === undefined) {
-      return res.status(400).json({ error: "Error, completa todo los campos" });
+    if (!nombre || !descripcion || precio_extra === undefined) {
+      return res
+        .status(400)
+        .json({ error: "Error, completa todos los campos" });
     }
 
-    const [result] = await pool.query(
-      `INSERT INTO ingredientes_extra (nombre,descripcion,precio_extra) 
-       VALUES (?,?,?)`,
-      [nombre, descripcion, precio_extra]
+    const result = await pool.query(
+      `
+      INSERT INTO ingredientes_extra
+        (nombre, descripcion, precio_extra, disponible)
+      VALUES
+        ($1, $2, $3, $4)
+      RETURNING id_ingrediente
+      `,
+      [nombre, descripcion, precio_extra, disponible],
     );
 
     res.status(201).json({
-      id: result.insertId,
+      id: result.rows[0].id_ingrediente,
       message: "Extra creado correctamente",
       ...req.body,
     });
@@ -698,95 +750,67 @@ app.post("/create-extra", async (req, res) => {
   }
 });
 
-// // Autenticación con Google
-// const client = new OAuth2Client(
-//   "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com"
-// );
-
-// app.post("/api/auth/google", async (req, res) => {
-//   const { token } = req.body;
-
-//   try {
-//     const ticket = await client.verifyIdToken({
-//       idToken: token,
-//       audience:
-//         "667645070229-ghra1vmvapp3uqkiqlrsghiu68pcqkau.apps.googleusercontent.com",
-//     });
-
-//     const payload = ticket.getPayload();
-//     const { sub, email, name } = payload;
-
-//     // Verifica si el usuario ya existe en la base de datos
-//     const [user] = await pool.query("SELECT * FROM users WHERE google_id = ?", [
-//       sub,
-//     ]);
-
-//     if (user.length === 0) {
-//       // Si no existe, crea un nuevo usuario
-//       const [result] = await pool.query(
-//         "INSERT INTO users (google_id, email, name) VALUES (?, ?, ?)",
-//         [sub, email, name]
-//       );
-//       res.json({ id: result.insertId, email, name });
-//     } else {
-//       // Si ya existe, devuelve la información del usuario
-//       res.json(user[0]);
-//     }
-//   } catch (error) {
-//     console.error(error);
-//     res.status(400).json({ error: "Token inválido" });
-//   }
-// });
-
-//BACK PARA PEDIDOS
-
-//Crear orden
-// Crear pedido con productos, extras (texto), combo (texto) y precio_total_extras (número)
 app.post("/orders", async (req, res) => {
-  const connection = await pool.getConnection();
-  await connection.beginTransaction();
+  const {
+    telefono_usuario,
+    direccion_entrega,
+    metodo_pago,
+    total,
+    notas,
+    productos,
+  } = req.body;
+
+  if (
+    !telefono_usuario ||
+    !direccion_entrega ||
+    !Array.isArray(productos) ||
+    productos.length === 0
+  ) {
+    return res.status(400).json({ error: "Faltan datos obligatorios" });
+  }
+
+  const client = await pool.connect();
 
   try {
-    const {
-      telefono_usuario,
-      direccion_entrega,
-      metodo_pago,
-      total,
-      notas,
-      productos,
-    } = req.body;
+    await client.query("BEGIN");
 
-    if (
-      !telefono_usuario ||
-      !direccion_entrega ||
-      !productos ||
-      productos.length === 0
-    ) {
-      return res.status(400).json({ error: "Faltan datos obligatorios" });
-    }
-
-    // Insertar en pedidos
-    const [pedidoResult] = await connection.query(
-      `INSERT INTO pedidos (telefono_usuario, direccion_entrega, metodo_pago, total, notas)
-       VALUES (?, ?, ?, ?, ?)`,
-      [telefono_usuario, direccion_entrega, metodo_pago, total, notas]
+    const pedidoResult = await client.query(
+      `
+      INSERT INTO pedidos
+        (telefono_usuario, direccion_entrega, metodo_pago, total, notas)
+      VALUES
+        ($1, $2, $3, $4, $5)
+      RETURNING id_pedido
+      `,
+      [telefono_usuario, direccion_entrega, metodo_pago, total, notas],
     );
 
-    const id_pedido = pedidoResult.insertId;
+    const id_pedido = pedidoResult.rows[0].id_pedido;
 
-    // Insertar productos del pedido
     for (const item of productos) {
-      const precio_total_extras = Array.isArray(item.extras_full)
+      const precioTotalExtrasCalculado = Array.isArray(item.extras_full)
         ? item.extras_full.reduce(
             (sum, extra) => sum + parseFloat(extra.precio_extra || 0),
-            0
+            0,
           )
         : 0;
 
-      await connection.query(
-        `INSERT INTO detalles_pedido 
-          (id_pedido, id_producto, cantidad, precio_unitario, extras, combo, precio_total_extras,imagen)
-           VALUES (?, ?, ?, ?, ?, ?, ?,?)`,
+      await client.query(
+        `
+        INSERT INTO detalles_pedido
+          (
+            id_pedido,
+            id_producto,
+            cantidad,
+            precio_unitario,
+            extras,
+            combo,
+            precio_total_extras,
+            imagen
+          )
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7, $8)
+        `,
         [
           id_pedido,
           item.id_producto,
@@ -794,33 +818,39 @@ app.post("/orders", async (req, res) => {
           item.precio_unitario,
           item.extras || null,
           item.combo || null,
-          item.precio_total_extras,
+          item.precio_total_extras ?? precioTotalExtrasCalculado,
           item.imagen,
-        ]
+        ],
       );
     }
 
-    await connection.commit();
-    connection.release();
+    await client.query("COMMIT");
 
     res.status(201).json({ id_pedido, message: "Pedido creado exitosamente" });
   } catch (error) {
-    await connection.rollback();
-    connection.release();
+    await client.query("ROLLBACK");
     console.error(error);
     res.status(500).json({ error: "Error al crear el pedido" });
+  } finally {
+    client.release();
   }
 });
 
-// Obtener pedidos por número telefónico (incluye extras, combo y precio_total_extras)
 app.get("/orders/user/:telefono", async (req, res) => {
   const { telefono } = req.params;
 
   try {
-    const [pedidos] = await pool.query(
-      `SELECT * FROM pedidos WHERE telefono_usuario = ? ORDER BY fecha_pedido DESC`,
-      [telefono]
+    const pedidosResult = await pool.query(
+      `
+      SELECT *
+      FROM pedidos
+      WHERE telefono_usuario = $1
+      ORDER BY fecha_pedido DESC
+      `,
+      [telefono],
     );
+
+    const pedidos = pedidosResult.rows;
 
     if (pedidos.length === 0) {
       return res
@@ -830,15 +860,25 @@ app.get("/orders/user/:telefono", async (req, res) => {
 
     const pedidosConProductos = await Promise.all(
       pedidos.map(async (pedido) => {
-        const [productos] = await pool.query(
-          `SELECT dp.id_producto, p.nombre, dp.cantidad, dp.precio_unitario, dp.extras, dp.combo, dp.precio_total_extras,dp.imagen
-           FROM detalles_pedido dp
-           JOIN productos p ON p.id_producto = dp.id_producto
-           WHERE dp.id_pedido = ?`,
-          [pedido.id_pedido]
+        const productosResult = await pool.query(
+          `
+          SELECT
+            dp.id_producto,
+            p.nombre,
+            dp.cantidad,
+            dp.precio_unitario,
+            dp.extras,
+            dp.combo,
+            dp.precio_total_extras,
+            dp.imagen
+          FROM detalles_pedido dp
+          JOIN productos p ON p.id_producto = dp.id_producto
+          WHERE dp.id_pedido = $1
+          `,
+          [pedido.id_pedido],
         );
 
-        const productosProcesados = productos.map((p) => ({
+        const productosProcesados = productosResult.rows.map((p) => ({
           ...p,
           extras: p.extras || "",
           combo: p.combo || "",
@@ -846,7 +886,7 @@ app.get("/orders/user/:telefono", async (req, res) => {
         }));
 
         return { ...pedido, productos: productosProcesados };
-      })
+      }),
     );
 
     res.json(pedidosConProductos);
